@@ -3,7 +3,7 @@
  * URI.js - Mutating URLs
  * IPv6 Support
  *
- * Version: 1.19.2
+ * Version: 1.19.11
  *
  * Author: Rodney Rehm
  * Web: http://medialize.github.io/URI.js/
@@ -190,7 +190,7 @@
  * URI.js - Mutating URLs
  * Second Level Domain (SLD) Support
  *
- * Version: 1.19.2
+ * Version: 1.19.11
  *
  * Author: Rodney Rehm
  * Web: http://medialize.github.io/URI.js/
@@ -433,7 +433,7 @@
 }));
 
 },{}],3:[function(require,module,exports){
-(function (global){
+(function (global){(function (){
 /*! https://mths.be/punycode v1.4.0 by @mathias */
 ;(function(root) {
 
@@ -968,12 +968,12 @@
 
 }(this));
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],"urijs":[function(require,module,exports){
 /*!
  * URI.js - Mutating URLs
  *
- * Version: 1.19.2
+ * Version: 1.19.11
  *
  * Author: Rodney Rehm
  * Web: http://medialize.github.io/URI.js/
@@ -1053,7 +1053,7 @@
     return /^[0-9]+$/.test(value);
   }
 
-  URI.version = '1.19.2';
+  URI.version = '1.19.11';
 
   var p = URI.prototype;
   var hasOwn = Object.prototype.hasOwnProperty;
@@ -1211,6 +1211,9 @@
     // balanced parens inclusion (), [], {}, <>
     parens: /(\([^\)]*\)|\[[^\]]*\]|\{[^}]*\}|<[^>]*>)/g,
   };
+  URI.leading_whitespace_expression = /^[\x00-\x20\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/
+  // https://infra.spec.whatwg.org/#ascii-tab-or-newline
+  URI.ascii_tab_whitespace = /[\u0009\u000A\u000D]+/g
   // http://www.iana.org/assignments/uri-schemes.html
   // http://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers#Well-known_ports
   URI.defaultPorts = {
@@ -1466,6 +1469,11 @@
         preventInvalidHostname: URI.preventInvalidHostname
       };
     }
+
+    string = string.replace(URI.leading_whitespace_expression, '')
+    // https://infra.spec.whatwg.org/#ascii-tab-or-newline
+    string = string.replace(URI.ascii_tab_whitespace, '')
+
     // [protocol"://"[username[":"password]"@"]hostname[":"port]"/"?][path]["?"querystring]["#"fragment]
 
     // extract fragment
@@ -1484,6 +1492,11 @@
       string = string.substring(0, pos);
     }
 
+    // slashes and backslashes have lost all meaning for the web protocols (https, http, wss, ws)
+    string = string.replace(/^(https?|ftp|wss?)?:+[/\\]*/i, '$1://');
+    // slashes and backslashes have lost all meaning for scheme relative URLs
+    string = string.replace(/^[/\\]{2,}/i, '//');
+
     // extract protocol
     if (string.substring(0, 2) === '//') {
       // relative-scheme
@@ -1498,7 +1511,7 @@
         if (parts.protocol && !parts.protocol.match(URI.protocol_expression)) {
           // : may be within the path
           parts.protocol = undefined;
-        } else if (string.substring(pos + 1, pos + 3) === '//') {
+        } else if (string.substring(pos + 1, pos + 3).replace(/\\/g, '/') === '//') {
           string = string.substring(pos + 3);
 
           // extract "user:pass@host:port"
@@ -1584,17 +1597,22 @@
   };
   URI.parseUserinfo = function(string, parts) {
     // extract username:password
+    var _string = string
+    var firstBackSlash = string.indexOf('\\');
+    if (firstBackSlash !== -1) {
+      string = string.replace(/\\/g, '/')
+    }
     var firstSlash = string.indexOf('/');
     var pos = string.lastIndexOf('@', firstSlash > -1 ? firstSlash : string.length - 1);
     var t;
 
-    // authority@ must come before /path
+    // authority@ must come before /path or \path
     if (pos > -1 && (firstSlash === -1 || pos < firstSlash)) {
       t = string.substring(0, pos).split(':');
       parts.username = t[0] ? URI.decode(t[0]) : null;
       t.shift();
       parts.password = t[0] ? URI.decode(t.join(':')) : null;
-      string = string.substring(pos + 1);
+      string = _string.substring(pos + 1);
     } else {
       parts.username = null;
       parts.password = null;
@@ -1625,7 +1643,10 @@
       // no "=" is null according to http://dvcs.w3.org/hg/url/raw-file/tip/Overview.html#collect-url-parameters
       value = v.length ? URI.decodeQuery(v.join('='), escapeQuerySpace) : null;
 
-      if (hasOwn.call(items, name)) {
+      if (name === '__proto__') {
+        // ignore attempt at exploiting JavaScript internals
+        continue;
+      } else if (hasOwn.call(items, name)) {
         if (typeof items[name] === 'string' || items[name] === null) {
           items[name] = [items[name]];
         }
@@ -1718,7 +1739,10 @@
     var t = '';
     var unique, key, i, length;
     for (key in data) {
-      if (hasOwn.call(data, key)) {
+      if (key === '__proto__') {
+        // ignore attempt at exploiting JavaScript internals
+        continue;
+      } else if (hasOwn.call(data, key)) {
         if (isArray(data[key])) {
           unique = {};
           for (i = 0, length = data[key].length; i < length; i++) {
